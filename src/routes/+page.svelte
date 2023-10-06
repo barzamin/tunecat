@@ -1,2 +1,6 @@
-<h1>Welcome to SvelteKit</h1>
-<p>Visit <a href="https://kit.svelte.dev">kit.svelte.dev</a> to read the documentation</p>
+<form action="/song">
+	<label for="input-track_id">song ID:</label>
+	<input type="text" name="track_id" id="input-track_id" />
+
+	<button>do it!</button>
+</form>
