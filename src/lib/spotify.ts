@@ -1,37 +1,4 @@
-import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET } from '$env/static/private';
-
-const CLIENT_CREDENTIALS_ENDPOINT = 'https://accounts.spotify.com/api/token';
-export const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
-
-interface ClientCredentialsResponse {
-	access_token: string;
-	token_type: string;
-	expires_in: number;
-}
-
-async function _getAccessToken(): Promise<ClientCredentialsResponse> {
-	console.log(`spotify token singleton fetch`);
-	const resp = await fetch(CLIENT_CREDENTIALS_ENDPOINT, {
-		method: 'POST',
-		body: new URLSearchParams({ grant_type: 'client_credentials' }),
-		headers: {
-			Authorization: 'basic ' + btoa(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`)
-		}
-	});
-	return (await resp.json()) as ClientCredentialsResponse;
-}
-
-let creds: ClientCredentialsResponse | null = null;
-export async function getAccessToken(): Promise<string> {
-	// TODO; backoff etc
-	if (!creds) {
-		creds = await _getAccessToken();
-	}
-
-	return creds.access_token;
-}
-
-interface AudioFeatures {
+export interface AudioFeatures {
 	acousticness: number;
 	analysis_url: string;
 	danceability: number;
@@ -50,16 +17,6 @@ interface AudioFeatures {
 	type: 'audio_features';
 	uri: string;
 	valence: number;
-}
-
-export async function audioFeatures(accessToken: string, trackId: string): Promise<AudioFeatures> {
-	const resp = await fetch(`${SPOTIFY_API_BASE}/audio-features/${trackId}`, {
-		headers: {
-			Authorization: `Bearer ${accessToken}`
-		}
-	});
-
-	return await resp.json();
 }
 
 export namespace Analysis {
@@ -147,26 +104,16 @@ export interface AudioAnalysis {
 	track: Analysis.Track;
 	bars: Analysis.Bar[];
 	beats: Analysis.Beat[];
-	section: Analysis.Section[];
+	sections: Analysis.Section[];
+	tatums: Analysis.Tatum[];
 }
-
-export async function audioAnalysis(accessToken: string, trackId: string): Promise<AudioAnalysis> {
-	const resp = await fetch(`${SPOTIFY_API_BASE}/audio-analysis/${trackId}`, {
-		headers: {
-			Authorization: `Bearer ${accessToken}`
-		}
-	});
-
-	return await resp.json();
-}
-
 export interface ImageObject {
 	url: string;
 	height: number;
 	width: number;
 }
 
-export interface SimplifiedArtistObject {
+export interface SimplifiedArtist {
 	external_urls: { spotify: string };
 	href: string; // points to full details
 	id: string;
@@ -175,7 +122,7 @@ export interface SimplifiedArtistObject {
 	uri: string;
 }
 
-export interface ArtistObject {
+export interface Artist {
 	external_urls: { spotify: string };
 	followers: { href: null; total: number };
 	genres: string[];
@@ -202,12 +149,12 @@ export interface Album {
 	restrictions: { reason: 'market' | 'product' | 'explicit' };
 	type: 'album';
 	uri: string;
-	artists: SimplifiedArtistObject[];
+	artists: SimplifiedArtist[];
 }
 
 export interface Track {
 	album: Album;
-	artists: ArtistObject[];
+	artists: Artist[];
 	available_markets: string[];
 	disc_number: number;
 	duration_ms: number; // [ms]
@@ -236,19 +183,34 @@ export interface Track {
 	is_local: boolean;
 }
 
-export async function track(
-	accessToken: string,
-	id: string,
-	market: string | null = null
-): Promise<Track> {
-	const url = new URL(`${SPOTIFY_API_BASE}/tracks/${id}`);
-	if (market) url.searchParams.append('market', market);
+export interface SearchParams {
+	market?: string; // ISO 3166-1 alpha-2 country code
+	limit?: number;
+	offset?: number; // pagination
+	// "If include_external=audio is specified it signals that the client can play
+	// externally hosted audio content, and marks the content as playable in the response.
+	// By default externally hosted audio content is marked as unplayable in the response."
+	include_external?: 'audio';
+}
 
-	const resp = await fetch(url, {
-		headers: {
-			Authorization: `Bearer ${accessToken}`
-		}
-	});
+export interface SearchResultCategory<T> {
+	href: string;
+	limit: number; // as set in query, or default
+	offset: number; // as set in query, or default
+	next: string | null; // pagination pointer
+	previous: string | null; // pagination pointer
+	total: number;
+	items: T[];
+}
 
-	return await resp.json();
+export interface SearchResults {
+	tracks: SearchResultCategory<Track>;
+	artists: SearchResultCategory<Artist>;
+	albums: SearchResultCategory<Album>;
+
+	// TODO: model these
+	playlists: SearchResultCategory<any>;
+	shows: SearchResultCategory<any>;
+	episodes: SearchResultCategory<any>;
+	audiobooks: SearchResultCategory<any>;
 }
